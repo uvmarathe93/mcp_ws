@@ -40,3 +40,38 @@ Clone and install in editable mode:
 git clone https://github.com/uvmarathe93/mcp_ws.git
 cd mcp_ws
 pip install -e .
+```
+
+## 🧪 Quick Start — Your First MCP Server
+Create server.py
+```python
+from mcp_ws import MCPWebSocketServer, tool
+
+server = MCPWebSocketServer()
+
+@tool
+def add(a: int, b: int):
+    """Add two numbers."""
+    return {"result": a + b}
+
+server.start("0.0.0.0", 8765)
+```
+
+Run:
+```bash
+python server.py
+```
+Your MCP server is now live at:
+```bash
+ws://localhost:8765
+```
+
+## 🧩 Testing the Server (HTML Client Included)
+Open MCPTest.html in your browser.
+
+Enter:
+```bash
+ws://localhost:8765
+```
+
+Click Connect → sends initialize.
