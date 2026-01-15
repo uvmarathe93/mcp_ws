@@ -1,0 +1,12 @@
+[project]
+name = "mcp_ws"
+version = "0.1.0"
+description = "Native WebSocket-based MCP server for Python"
+authors = [{ name="Your Name" }]
+requires-python = ">=3.10"
+dependencies = [
+    "websockets>=12.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/YOUR_USERNAME/mcp_ws"
