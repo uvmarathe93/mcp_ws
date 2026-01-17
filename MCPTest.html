@@ -1,82 +1,162 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="UTF-8">
-        <title>MCP WebSocket Test Client</title>
-        <style>
-            body { font-family: Arial; margin: 20px; }
-            textarea { width: 100%; height: 120px; }
-            pre { background: #f4f4f4; padding: 10px; height: 250px; overflow-y: scroll; }
-            .btn { padding: 8px 16px; margin-right: 10px; cursor: pointer; }
-        </style>
-    </head>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MCP WebSocket Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #log {
+            white-space: pre-wrap;
+            background: #f4f4f4;
+            padding: 10px;
+            border: 1px solid #ccc;
+            height: 300px;
+            overflow-y: auto;
+        }
+        .tool-container {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background: #fafafa;
+        }
+        .param {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
     <body>
 
-    <h2>MCP WebSocket Test Client</h2>
+        <h2>MCP WebSocket Test Client</h2>
 
-    <label>WebSocket URL:</label><br>
-    <input id="wsUrl" value="ws://localhost:8765" style="width: 300px;">
-    <button class="btn" onclick="connectWS()">Connect</button>
+        <label>WebSocket URL:</label>
+        <input id="wsUrl" value="ws://localhost:8765" size="40">
+        <button onclick="connectWS()">Connect</button>
 
-    <h3>Outgoing Request</h3>
-    <textarea id="requestBox">
-        {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {}
-        }
-    </textarea>
-    <br>
-    <button class="btn" onclick="sendRequest()">Send</button>
-    <button class="btn" onclick="sendToolsList()">tools/list</button>
+        <h3>Log</h3>
+        <div id="log"></div>
 
-    <h3>Incoming Messages</h3>
-    <pre id="log"></pre>
+        <h3>Tools</h3>
+        <select id="toolSelect"></select>
+        <button onclick="loadToolUI()">Load Params</button>
 
-    <script>
-    let ws;
+        <div id="toolUI" class="tool-container"></div>
+        <button onclick="callTool()">Call Tool</button>
 
-    function log(msg) {
-        const logBox = document.getElementById("log");
-        logBox.textContent += msg + "\n\n";
-        logBox.scrollTop = logBox.scrollHeight;
-    }
+        <script>
+            let ws = null;
+            let tools = {};
 
-    function connectWS() {
-        const url = document.getElementById("wsUrl").value;
-        ws = new WebSocket(url);
+            function log(msg) {
+                const logDiv = document.getElementById("log");
+                logDiv.textContent += msg + "\n";
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
 
-        ws.onopen = () => log("✅ Connected to " + url);
-        ws.onmessage = evt => log("⬅️ " + evt.data);
-        ws.onerror = err => log("❌ Error: " + err.message);
-        ws.onclose = () => log("🔌 Connection closed");
-    }
+            function connectWS() {
+                const url = document.getElementById("wsUrl").value;
+                ws = new WebSocket(url);
 
-    function sendRequest() {
-        if (!ws || ws.readyState !== WebSocket.OPEN) 
-            return alert("WebSocket is not connected.");
+                ws.onopen = () => {
+                    log("Connected to " + url);
+                    sendJSON({
+                        jsonrpc: "2.0",
+                        id: 1,
+                        method: "initialize",
+                        params: {}
+                    });
+                };
 
-        const txt = document.getElementById("requestBox").value;
-        try {
-            JSON.parse(txt); // validate JSON
-            ws.send(txt);
-            log("➡️ " + txt);
-        } catch (e) {
-            alert("Invalid JSON: " + e);
-        }
-    }
+                ws.onerror = (e) => log("WebSocket error");
 
-    function sendToolsList() {
-        const req = {
-            jsonrpc: "2.0",
-            id: Math.floor(Math.random() * 99999),
-            method: "tools/list",
-            params: {}
-        };
-        ws.send(JSON.stringify(req));
-        log("➡️ " + JSON.stringify(req, null, 2));
-    }
-    </script>
+                ws.onmessage = (msg) => {
+                    log("<< " + msg.data);
+                    const data = JSON.parse(msg.data);
+                    handleResponse(data);
+                };
+            }
+
+            function sendJSON(obj) {
+                const json = JSON.stringify(obj);
+                log(">> " + json);
+                ws.send(json);
+            }
+
+            function handleResponse(res) {
+                if (res.result && res.result.capabilities) {
+                    log("Initialization complete. Loading tools...");
+                    sendJSON({
+                        jsonrpc: "2.0",
+                        id: 2,
+                        method: "tools/list",
+                        params: {}
+                    });
+                }
+
+                if (res.result && res.result.tools) {
+                    tools = {};
+                    const select = document.getElementById("toolSelect");
+                    select.innerHTML = "";
+
+                    res.result.tools.forEach(t => {
+                        tools[t.name] = t;
+                        select.innerHTML += `<option value="${t.name}">${t.name}</option>`;
+                    });
+
+                    log("Tools loaded.");
+                }
+            }
+
+            function loadToolUI() {
+                const toolName = document.getElementById("toolSelect").value;
+                const tool = tools[toolName];
+                if (!tool) return;
+
+                const ui = document.getElementById("toolUI");
+                ui.innerHTML = `<h4>${tool.name}</h4><p>${tool.description}</p>`;
+
+                const props = tool.parameters?.properties || {};
+
+                for (const key of Object.keys(props)) {
+                    ui.innerHTML += `
+                        <div class="param">
+                            <label>${key} (${props[key].type}):</label><br>
+                            <input id="param_${key}" size="30">
+                        </div>`;
+                }
+            }
+
+            function callTool() {
+                const toolName = document.getElementById("toolSelect").value;
+                const tool = tools[toolName];
+
+                const props = tool.parameters?.properties || {};
+                const args = {};
+
+                for (const key of Object.keys(props)) {
+                    const val = document.getElementById("param_" + key).value;
+                    const type = props[key].type;
+
+                    if (type === "integer") {
+                        args[key] = parseInt(val, 10);
+                    } else if (type === "number") {
+                        args[key] = parseFloat(val);
+                    } else if (type === "boolean") {
+                        args[key] = (val.toLowerCase() === "true");
+                    } else {
+                        args[key] = val;
+                    }
+                }
+
+                sendJSON({
+                    jsonrpc: "2.0",
+                    id: Date.now(),
+                    method: "tools/call",
+                    params: { name: toolName, arguments: args }
+                });
+            }
+        </script>
     </body>
 </html>
