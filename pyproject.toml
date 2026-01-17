@@ -10,3 +10,6 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/YOUR_USERNAME/mcp_ws"
+
+[project.scripts]
+mcpws = "mcp_ws.cli:main"
